@@ -57,12 +57,31 @@ def get_cpu_temperature(label="CPU"):
 
 def get_temperature():
     try:
-        temp = round(psutil.sensors_temperatures()[SENSOR][0].current)
-    except KeyError:
-        print("Sensor does not exist in the system.")
-        temp = get_cpu_temperature()
-
-    return get_data(value=temp, mode="temp")
+        # Get sensor data with proper error checking
+        sensor_data = psutil.sensors_temperatures().get(SENSOR)
+        
+        if not sensor_data:
+            print(f"Warning: {SENSOR} sensor not found or has no readings")
+            return get_cpu_temperature()
+        
+        # Get the Tctl temperature specifically if available
+        for reading in sensor_data:
+            if reading.label == 'Tctl':
+                temp = round(reading.current)
+                break
+        else:
+            # Fall back to first reading if Tctl not found
+            temp = round(sensor_data[0].current)
+            print(f"Using {sensor_data[0].label} instead of Tctl")
+        
+        return get_data(value=temp, mode="temp")
+        
+    except (IndexError, AttributeError) as e:
+        print(f"Error reading {SENSOR} sensor: {e}")
+        return get_cpu_temperature()
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        return get_cpu_temperature()
 
 
 def get_utils():
