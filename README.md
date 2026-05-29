@@ -32,7 +32,7 @@ sudo apt install python3-venv
 
 The Python packages are installed automatically into the project venv from `requirements.txt`:
 
-- `hid`
+- `hidapi`
 - `psutil`
 
 ## Find The Temperature Sensor
