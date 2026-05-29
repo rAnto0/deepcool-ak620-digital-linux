@@ -1,64 +1,128 @@
-# DeepCool AK Series Digital Air Cooler Monitor on Linux
+# DeepCool AK Series Digital Monitor for Linux
 
-This project enables monitoring of temperature and CPU utilization on DeepCool's AK series digital air cooler for Linux systems.  
+Personal fork of `raghulkrishna/deepcool-ak620-digital-linux` for running the DeepCool AK620 Digital display on Linux.
 
-## Dependencies
+This version is focused on a systemd-based installation with an isolated Python virtual environment in `/opt/deepcool-ak-series-digital`.
 
-This script requires the following dependencies:
-- Python 3
-- `hidapi`
-- `psutil`
+## Tested Setup
 
-You can install by running the provided `setup.sh` script:
-```bash
-usage: ./setup.sh <model> <sensor> [-dt | --disable-temp] [-du | --disable-utils]
-        -dt, --disable-temp:    disable sensor temperature display
-        -du, --disable-utils:   disable CPU utilization display
-```
+- Cooler: DeepCool AK620 Digital
+- HID vendor id: `0x3633`
+- HID product id: `0x0002`
+- Temperature sensor used on my system: `coretemp`
+- Service manager: systemd
 
-Available supported models:
+## Supported Models
+
 - `ak620`
 - `ak500s`
 
-### Step-by-Step Guide
+## Requirements
 
-1. **Install Python Dependencies**: First, you need to install the necessary Python libraries, `hidapi` and `psutil`. These libraries allow the script to interact with the hardware and monitor system resources.
+- Python 3
+- Python venv support
+- systemd
+- sudo/root access for installing the service
 
-    Open a terminal and run the following commands:
-    ```bash
-    pip install hid
-    pip install psutil
-    ```
-    Note: If you encounter permission errors, try adding --user to install the packages for your user only or use sudo to install them system-wide (not recommended for `pip`).
+On Debian/Ubuntu-based systems, venv support is usually provided by:
 
-2. **Clone the Repository**: The script and necessary configuration files are hosted on GitHub. Use git to clone the repository to your local machine.
-    ```bash
-    git clone https://github.com/raghulkrishna/deepcool-ak620-digital-linux
-    ```
+```bash
+sudo apt install python3-venv
+```
 
-3. **Navigate to the Project Directory**: Change your current directory to the newly cloned project folder.
-    ```bash
-    cd deepcool-ak620-digital-linux
-    ```
+The Python packages are installed automatically into the project venv from `requirements.txt`:
 
-4. **Look up the hardware temperature sensor**: Retrieve hardware temperature sensor label in the system. Run the following Python code snippet.
-    ```python
-    import psutil
-    print(psutil.sensors_temperatures().keys())
-    ```
+- `hid`
+- `psutil`
 
-5. **Run the Setup Script**: The `setup.sh` script will automate the configuration and setup process. Run the script by executing:
+## Find The Temperature Sensor
 
-    Replace `model` with one of the available models matches your configuration and `sensor` with the label you retrieve from previous step.
-    ```bash
-    ./setup.sh <model> <sensor>
-    ```
+Before installing, check which temperature sensors `psutil` can see:
 
-## Troubleshooting
+```bash
+python3 - <<'PY'
+import psutil
+print(psutil.sensors_temperatures().keys())
+PY
+```
 
-1) If you encounter any errors related to HIDAPI or psutil, ensure that the dependencies are installed correctly by running the setup.sh script.
-2) Make sure the AK620 digital air cooler is properly connected to your system and that the correct Vendor ID and Product ID are set in the script.
-3) How to verify Product ID and Vendor ID ?  use lsusb -v to get the list of devices ans search for your cooler.
+On my system the useful sensor is `coretemp`.
 
-Credits
-https://github.com/Algorithm0/deepcool-digital-info
+## Install
+
+For my AK620 setup:
+
+```bash
+./setup.sh ak620 coretemp
+```
+
+The installer will:
+
+- copy the application to `/opt/deepcool-ak-series-digital`
+- create `/opt/deepcool-ak-series-digital/venv`
+- install Python dependencies into that venv
+- install systemd units into `/etc/systemd/system`
+- enable the main service
+- enable the resume restart service
+- restart the main service
+
+## Install Options
+
+Usage:
+
+```bash
+./setup.sh <model> <sensor> [-dt | --disable-temp] [-du | --disable-utils]
+```
+
+Examples:
+
+```bash
+./setup.sh ak620 coretemp
+./setup.sh ak620 coretemp --disable-utils
+./setup.sh ak620 coretemp --disable-temp
+./setup.sh ak620 coretemp --disable-temp --disable-utils
+```
+
+## Check Service Status
+
+```bash
+systemctl status deepcool-ak-series-digital.service
+```
+
+Follow logs:
+
+```bash
+journalctl -u deepcool-ak-series-digital.service -f
+```
+
+Restart manually:
+
+```bash
+sudo systemctl restart deepcool-ak-series-digital.service
+```
+
+## Uninstall
+
+```bash
+sudo systemctl disable --now deepcool-ak-series-digital.service
+sudo systemctl disable deepcool-ak-series-digital-restart.service
+sudo rm -f /etc/systemd/system/deepcool-ak-series-digital.service
+sudo rm -f /etc/systemd/system/deepcool-ak-series-digital-restart.service
+sudo rm -rf /opt/deepcool-ak-series-digital
+sudo systemctl daemon-reload
+```
+
+## Changes In This Fork
+
+- Uses `/usr/bin/python3`/venv instead of relying on `/usr/bin/python`.
+- Installs into `/opt/deepcool-ak-series-digital` instead of copying the script to `/usr/bin`.
+- Installs local systemd units into `/etc/systemd/system`.
+- Adds `requirements.txt` for reproducible dependency installation.
+- Handles missing temperature sensor readings without sending invalid data to the HID device.
+- Validates supported model names in `setup.sh`.
+- Supports using both `--disable-temp` and `--disable-utils` in one install command.
+
+## Credits
+
+- Original project: https://github.com/raghulkrishna/deepcool-ak620-digital-linux
+- Related reference: https://github.com/Algorithm0/deepcool-digital-info

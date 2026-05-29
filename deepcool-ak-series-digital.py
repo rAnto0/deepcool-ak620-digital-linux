@@ -12,10 +12,11 @@ INTERVAL = 2
 
 
 def get_bar_value(input_value):
-    return (input_value - 1) // 10 + 1
+    return max(0, min(10, (input_value - 1) // 10 + 1))
 
 
 def get_data(value=0, mode="util"):
+    value = max(0, min(9999, round(value)))
     base_data = [16] + [0 for i in range(64 - 1)]
     numbers = [int(char) for char in str(value)]
     base_data[2] = get_bar_value(value)
@@ -47,12 +48,15 @@ def get_data(value=0, mode="util"):
 
 def get_cpu_temperature(label="CPU"):
     sensors = psutil.sensors_temperatures()
-    for sensor_label, sensor_list in sensors.items():
+    first_temperature = None
+    for sensor_list in sensors.values():
         for sensor in sensor_list:
+            if first_temperature is None:
+                first_temperature = round(sensor.current)
             if sensor.label == label:
-                return sensor.current
+                return round(sensor.current)
 
-    return 0
+    return first_temperature or 0
 
 
 def get_temperature():
@@ -62,7 +66,7 @@ def get_temperature():
         
         if not sensor_data:
             print(f"Warning: {SENSOR} sensor not found or has no readings")
-            return get_cpu_temperature()
+            return get_data(value=get_cpu_temperature(), mode="temp")
         
         # Get the Tctl temperature specifically if available
         for reading in sensor_data:
@@ -78,10 +82,10 @@ def get_temperature():
         
     except (IndexError, AttributeError) as e:
         print(f"Error reading {SENSOR} sensor: {e}")
-        return get_cpu_temperature()
+        return get_data(value=get_cpu_temperature(), mode="temp")
     except Exception as e:
         print(f"Unexpected error: {e}")
-        return get_cpu_temperature()
+        return get_data(value=get_cpu_temperature(), mode="temp")
 
 
 def get_utils():

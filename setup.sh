@@ -1,53 +1,83 @@
 #!/bin/bash
 
-declare -A PRODUCTS
+set -euo pipefail
 
-PRODUCTS=(
+declare -A PRODUCTS=(
     [ak620]="0x0002"
     [ak500s]="0x0004"
 )
 
+INSTALL_DIR="/opt/deepcool-ak-series-digital"
+SERVICE_DIR="/etc/systemd/system"
+SCRIPT_NAME="deepcool-ak-series-digital.py"
+
 usage() {
     echo "usage: ./setup.sh <model> <sensor> [-dt | --disable-temp] [-du | --disable-utils]"
+    echo -e "\tmodel:\t\t\tone of: ${!PRODUCTS[*]}"
+    echo -e "\tsensor:\t\t\tpsutil temperature sensor name, for example coretemp"
     echo -e "\t-dt, --disable-temp:\tdisable sensor temperature display"
     echo -e "\t-du, --disable-utils:\tdisable CPU utilization display"
 }
 
-if [ "$#" -lt 2 ]
-then
+if [[ $# -lt 2 ]]; then
     echo "Please provide valid product and hardware sensor names."
     usage
     exit 1
 fi
 
-PRODUCT=$1
-SENSOR=$2
+PRODUCT="$1"
+SENSOR="$2"
+SHOW_TEMP="True"
+SHOW_UTIL="True"
+shift 2
 
-while [[ $# -gt 2 ]]; do
-    case "$3" in
+if [[ -z "${PRODUCTS[$PRODUCT]+x}" ]]; then
+    echo "Unsupported model: $PRODUCT"
+    usage
+    exit 1
+fi
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
         -dt|--disable-temp)
-            sed -i "/SHOW_TEMP = True/c\SHOW_TEMP = False" deepcool-ak-series-digital.py
-            break
+            SHOW_TEMP="False"
             ;;
         -du|--disable-utils)
-            sed -i "/SHOW_UTIL = True/c\SHOW_UTIL = False" deepcool-ak-series-digital.py
-            break
+            SHOW_UTIL="False"
             ;;
         *)
-            echo "Invalid optional argument."
+            echo "Invalid optional argument: $1"
             usage
             exit 1
             ;;
     esac
+    shift
 done
 
-sed -i "/PRODUCT_ID = 0/c\PRODUCT_ID = ${PRODUCTS[${PRODUCT}]}" deepcool-ak-series-digital.py
-sed -i "/SENSOR = \"\"/c\SENSOR = \"${SENSOR}\"" deepcool-ak-series-digital.py
+if [[ ! -f "requirements.txt" || ! -f "$SCRIPT_NAME" ]]; then
+    echo "Run setup.sh from the project directory."
+    exit 1
+fi
 
-sudo cp -f deepcool-ak-series-digital.service /lib/systemd/system/
-sudo cp -f deepcool-ak-series-digital-restart.service /lib/systemd/system/
-sudo cp -f deepcool-ak-series-digital.py /usr/bin/deepcool-ak-series-digital.py
+sudo install -d "$INSTALL_DIR"
+sudo install -m 0644 "$SCRIPT_NAME" "$INSTALL_DIR/$SCRIPT_NAME"
+sudo install -m 0644 requirements.txt "$INSTALL_DIR/requirements.txt"
 
+sudo sed -i \
+    -e "s/^PRODUCT_ID = .*/PRODUCT_ID = ${PRODUCTS[$PRODUCT]}/" \
+    -e "s/^SENSOR = .*/SENSOR = \"$SENSOR\"/" \
+    -e "s/^SHOW_TEMP = .*/SHOW_TEMP = $SHOW_TEMP/" \
+    -e "s/^SHOW_UTIL = .*/SHOW_UTIL = $SHOW_UTIL/" \
+    "$INSTALL_DIR/$SCRIPT_NAME"
+
+sudo python3 -m venv "$INSTALL_DIR/venv"
+sudo "$INSTALL_DIR/venv/bin/python" -m pip install --upgrade pip
+sudo "$INSTALL_DIR/venv/bin/python" -m pip install -r "$INSTALL_DIR/requirements.txt"
+
+sudo install -m 0644 deepcool-ak-series-digital.service "$SERVICE_DIR/deepcool-ak-series-digital.service"
+sudo install -m 0644 deepcool-ak-series-digital-restart.service "$SERVICE_DIR/deepcool-ak-series-digital-restart.service"
+
+sudo systemctl daemon-reload
 sudo systemctl enable deepcool-ak-series-digital.service
 sudo systemctl enable deepcool-ak-series-digital-restart.service
-sudo systemctl start deepcool-ak-series-digital.service
+sudo systemctl restart deepcool-ak-series-digital.service
